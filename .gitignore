@@ -1,14 +1,14 @@
 __pycache__/
 .idea/
-input/dist_data/
+input/dist_data/*
 input/dist_data_tmp/
-input/ESM2_data/
+input/ESM2_data/*
 input/ESM2_data_tmp/
-input/ESMIF1_data/
+input/ESMIF1_data/*
 input/ESMIF1_data_tmp/
-input/pdb_data/
+input/pdb_data/*
 input/pdb_data_tmp/
 input/pdb_data_temp/
 input/linear_train copy.csv
-input/ProtVec_data/
+input/ProtVec_data/*
 input/ProtVec_data_tmp/
