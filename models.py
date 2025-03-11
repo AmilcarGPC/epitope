@@ -228,6 +228,7 @@ def train_model2(train_batches, val_batches, test_batches, kidera_embedding,
     max_val_auc = 0
     early_stopping_counter = 0
     best_model = 'None'
+    epochs_taked = epochs
     for epoch in range(epochs):
         print(f'Epoch: {epoch + 1} / {epochs}')
 
@@ -247,12 +248,13 @@ def train_model2(train_batches, val_batches, test_batches, kidera_embedding,
             early_stopping_counter = 0
             best_model = copy.deepcopy(model)
         elif early_stopping and early_stopping_counter == 10:
+            epochs_taked = epoch
             break
         else:
             early_stopping_counter += 1
 
 
-    plot_loss(train_loss_list, val_loss_list, test_loss_list, epochs, save_dir, "loss", description)
+    plot_loss(train_loss_list, val_loss_list, test_loss_list, epochs_taked, save_dir, "loss", description)
     #plot_loss(train_auc_list, val_auc_list, test_auc_list, num_epochs, save_dir, "AUC", description)
     torch.save(best_model.state_dict(), f"{save_dir}/model_{description}.pt")
     #train_loss, train_auc = train_epoch(train_batches, best_model, optimizer, epoch, device)

@@ -10,3 +10,5 @@ input/pdb_data/
 input/pdb_data_tmp/
 input/pdb_data_temp/
 input/linear_train copy.csv
+input/ProtVec_data/
+input/ProtVec_data_tmp/

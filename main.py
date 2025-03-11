@@ -2,6 +2,7 @@ import sys
 import os
 import torch
 import numpy as np
+import pandas as pd
 from data_load import load_data_seq_pro, load_data_pdb_list, load_data_pdb_path, create_batches
 from models import train_model2, predict_model
 from collections import OrderedDict
@@ -9,6 +10,51 @@ import random
 import timeit
 import argparse
 import shutil
+
+# Add ProtVec utilities
+def load_protvec_model(csv_file):
+    """Load ProtVec model from CSV file."""
+    print(f"Loading ProtVec model from {csv_file}")
+    df = pd.read_csv(csv_file, sep='\t')
+    protvec_dict = {}
+    for index, row in df.iterrows():
+        trigram = row.iloc[0]
+        vector = row.iloc[1:].values.astype(float)
+        protvec_dict[trigram] = vector
+    print(f"ProtVec model loaded with {len(protvec_dict)} trigrams")
+    return protvec_dict
+
+def generate_protvec_embedding(sequence, protvec_dict):
+    """Generate ProtVec embedding for a protein sequence."""
+    # Generate trigrams
+    sequence = sequence.upper()
+    trigrams = [sequence[i:i+3] for i in range(len(sequence)-2)]
+    
+    # Find matching trigrams
+    valid_trigrams = [t for t in trigrams if t in protvec_dict]
+    
+    if not valid_trigrams:
+        return np.zeros(100)
+    
+    # Average trigram vectors
+    return np.mean([protvec_dict[t] for t in valid_trigrams], axis=0)
+
+def compute_sequence_protvec(sequence_dict, output_dir, protvec_dict):
+    """Compute ProtVec embeddings for a set of sequences and save to files."""
+    os.makedirs(output_dir, exist_ok=True)
+    
+    for name, seq in sequence_dict.items():
+        output_file = os.path.join(output_dir, f"{name}.npy")
+        
+        # Skip if embedding already exists
+        if os.path.exists(output_file):
+            print(f"ProtVec embedding for {name} already exists")
+            continue
+        
+        # Generate embedding
+        embedding = generate_protvec_embedding(seq, protvec_dict)
+        np.save(output_file, embedding)
+        print(f"Generated ProtVec embedding for {name}")
 
 def load_kidera_values(file_path, idx_to_amino):
     dict_aa_values = {}
@@ -112,7 +158,7 @@ if __name__ == '__main__':
     start = timeit.default_timer()
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("--mode", type=str, required = True, choices = ["train", "predict"] )
-    parser.add_argument("--init", type=str, required = True, choices = ["Kidera" ,"Random",  "Kidera+bio", "ESM-2", "ESM-IF1"] )
+    parser.add_argument("--init", type=str, required = True, choices = ["Kidera" ,"Random",  "Kidera+bio", "ESM-2", "ESM-IF1", "ProtVec"] )
     parser.add_argument("--model", type=str, required = True, choices = ["BiLSTM" ,"GCN",  "Boosting"] ) 
     parser.add_argument("--epi", type=str, default= "Linear",  required = True, choices = ["Linear", "Nonlinear", "Both"] )  
     parser.add_argument("--train_path", type=str, default= "None",  required = False )  
@@ -123,11 +169,11 @@ if __name__ == '__main__':
     parser.add_argument("--output_dir", type=str, default= "output",  required = False )
     
     args = parser.parse_args()
-    mode = args.mode #sys.argv[1]#sys.argv[1]  # train or predict
-    initialization = args.init #sys.argv[2]# "Kidera+bio" #sys.argv[2] #Kidera ,random Kidera+bio, random, ESM-2, ESM-IF1
+    mode = args.mode
+    initialization = args.init
     print(initialization)
-    if initialization not in ["Kidera+bio", "Random", "ESM-2", "ESM-IF1", "Kidera"]:
-        print(f"Initialization method is not valid. Please insert: Random/Kidera/Kidera+bio/ESM-2/ESM-IF1")
+    if initialization not in ["Kidera+bio", "Random", "ESM-2", "ESM-IF1", "Kidera", "ProtVec"]:
+        print(f"Initialization method is not valid. Please insert: Random/Kidera/Kidera+bio/ESM-2/ESM-IF1/ProtVec")
         exit()
     model = args.model #sys.argv[3]#"BiLSTM"#"BiLSTM"#sys.argv[3] #BiLSTM , GCN, boosting
     if model not in ["BiLSTM", "GCN", "Boosting"]:
@@ -154,7 +200,12 @@ if __name__ == '__main__':
                 "BiLSTM_ESM-2_Linear" : "models/model_train_BiLSTM_ESM-2_linear.pt", #_train_
                 "BiLSTM_Kidera_Linear" :  "models/model_train_BiLSTM_Kidera_linear.pt", #_train_
                  "BiLSTM_Kidera+bio_Linear" : "models/model_train_BiLSTM_Kidera+bio_linear.pt", #_train_
-                 "BiLSTM_ESM-2_Both": "models/model_train_BiLSTM_ESM-2_Both.pt"  
+                 "BiLSTM_ESM-2_Both": "models/model_train_BiLSTM_ESM-2_Both.pt",
+                 "BiLSTM_ProtVec_Linear": "models/model_train_BiLSTM_ProtVec_linear.pt",
+            "GCN_ProtVec_Linear": "models/model_train_GCN_ProtVec_linear.pt",
+            "BiLSTM_ProtVec_Nonlinear": "models/model_train_BiLSTM_ProtVec_nonlinear.pt",
+            "GCN_ProtVec_Nonlinear": "models/model_train_GCN_ProtVec_nonlinear.pt",
+            "BiLSTM_ProtVec_Both": "models/model_train_BiLSTM_ProtVec_Both.pt"  
                                    } 
 
                 thresholds_dict = {"BiLSTM_ESM-IF1_Nonlinear" : 0.21, 
@@ -170,7 +221,14 @@ if __name__ == '__main__':
                                       "Boosting_ESM-IF1_Nonlinear" :  0.3,
                                       
                                       "Boosting_ESM-2_Nonlinear" : 0.3,
-                
+                "BiLSTM_ProtVec_Linear": 0.12,
+            "GCN_ProtVec_Linear": 0.12,
+            "BiLSTM_ProtVec_Nonlinear": 0.21,
+            "GCN_ProtVec_Nonlinear": 0.21,
+            "BiLSTM_ProtVec_Both": 0.15,
+            "Boosting_ProtVec_Linear": 0.3,
+            "Boosting_ProtVec_Nonlinear": 0.3,
+            "Boosting_ProtVec_Both": 0.3
                     }                                   
                 """thresholds_dict = {"BiLSTM_ESM-IF1_Nonlinear" : 0.05202958360314369, 
                                       "GCN_ESM-IF1_Nonlinear" : 0.07649166136980057, 
@@ -217,6 +275,11 @@ if __name__ == '__main__':
     print(save_dir)
 
     i = 1000
+    params["protvec_encoding_dir"] = "input/ProtVec_data"
+    params["protvec_encoding_dir_tmp"] = "input/ProtVec_data_tmp"
+    if not os.path.exists(params["protvec_encoding_dir_tmp"]):
+        os.mkdir(params["protvec_encoding_dir_tmp"])
+    params["protvec_model_path"] = "protVec_100d_3grams.csv"  # Path to your ProtVec model
     params["esmif1_encoding_dir"] = "input/ESMIF1_data_tmp"
     if not os.path.exists(params["esmif1_encoding_dir"]):
         os.mkdir(params["esmif1_encoding_dir"])
@@ -237,6 +300,8 @@ if __name__ == '__main__':
         params["embedding_dim"] = 1280
     elif initialization == "ESM-IF1":
         params["embedding_dim"] = 512
+    elif initialization == "ProtVec":
+        params["embedding_dim"] = 100
     else:
         params["embedding_dim"] = 10
 
